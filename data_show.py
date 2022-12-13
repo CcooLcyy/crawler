@@ -1,3 +1,5 @@
+from email.utils import format_datetime
+from numpy import true_divide
 import requests
 from lxml import etree
 import json, csv
@@ -6,43 +8,62 @@ import pandas as pd
 from pyecharts.charts import Map, Page
 from pyecharts import options as opts
 
-def handle_data():
-    # 爬虫抓取百度疫情数据
-    url = 'https://voice.baidu.com/act/newpneumonia/newpneumonia'
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Mobile Safari/537.36"
-    }
-    response = requests.get(url=url, headers=headers).text
-    html = etree.HTML(response)
-    json_text_array = html.xpath('//script[@type="application/json"]/text()')
+class Create_data():
+    def __init__(self, url):
+        self.__url = url
+        self.__province = None
+        self.__summary = None
 
-    json_text = json_text_array[0]
-    result = json.loads(json_text)
-    # 控制生成json文件
-    # filename = 'text.json'
-    # with open(filename, 'w', encoding='utf8') as f_obj:
-    #     json.dump(result, f_obj, ensure_ascii=False)
+    def __get_data_by_array(self):
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Mobile Safari/537.36"
+        }
+        response = requests.get(url=self.__url, headers=headers).text
+        html = etree.HTML(response)
+        json_text_array = html.xpath('//script[@type="application/json"]/text()')
+        return json_text_array
+    
+    def __handle_data(self):
+        json_test = self.__get_data_by_array()[0]
+        result = json.loads(json_test)
+        # 将数据进一步提纯
+        result = result['component']
+        self.__province = result[0]['caseList']
+        self.__summary = result[0]['summaryDataIn']
 
-    result = result["component"]
-    # # 数据提取
-    province = result[0]['caseList']
-    # summary_data = result[0]['summaryDataIn']
+    def format_data(self):
+        self.__handle_data()
+        province_rows_list = [["省份", "新增确诊", "现有确诊"]]
+        for line in self.__province:
+            line_name = [line["area"], line["confirmedRelative"], line["curConfirm"]]
+            for ele in line_name:
+                if ele == '':
+                    ele = 0
+            province_rows_list.append(line_name)
+        return province_rows_list
 
-    rows_list = [["省份", "新增确诊", "现有确诊"]]
-    for line in province:
-        line_name = [line["area"], line["confirmedRelative"], line["curConfirm"]]
-        for ele in line_name:
-            if ele == '':
-                ele = 0
-        rows_list.append(line_name)
-    # print(rows_list)
+    def csv(self, province=False):
+        if(province == True):
+            data = self.format_data()
+            FILENAME = 'data.csv'
+            with open(FILENAME, 'w', encoding='utf8') as file:
+                writer = csv.writer(file)
+                writer.writerows(data)
+        # elif(summary == True):
 
-    with open('data.csv', 'w', newline='', encoding='utf8') as file:
-        writer = csv.writer(file)
-        writer.writerows(rows_list)
+    # @property
+    # def json(self):
+    #     FILENAME = 'data.json'
+    #     with open(FILENAME, 'w', encoding='utf8') as file:
+    #         json.dumps(json_data, file, ensure_ascii=False)
 
-    filename = 'data.csv'
-    return filename
+
+
+data = Create_data('https://voice.baidu.com/act/newpneumonia/newpneumonia')
+data.csv(province=True)
+
+
+exit()
 
 
 def make_map(filename):
